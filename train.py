@@ -1,3 +1,5 @@
+import datetime
+
 import torch
 from torch import nn
 from opt import get_opts
@@ -7,6 +9,8 @@ import imageio
 import numpy as np
 import cv2
 from einops import rearrange
+
+os.environ['CUDA_VISIBLE_DEVICES']='0'
 
 # data
 from torch.utils.data import DataLoader
@@ -67,14 +71,7 @@ class NeRFSystem(LightningModule):
             for p in self.val_lpips.net.parameters():
                 p.requires_grad = False
 
-        rgb_act = 'None' if self.hparams.use_exposure else 'Sigmoid'
-        self.model = NGP(scale=self.hparams.scale, rgb_act=rgb_act)
-        G = self.model.grid_size
-        self.model.register_buffer('density_grid',
-            torch.zeros(self.model.cascades, G**3))
-        self.model.register_buffer('grid_coords',
-            create_meshgrid3d(G, G, G, False, dtype=torch.int32).reshape(-1, 3))
-
+        print('nerf system initialized! ')
     def forward(self, batch, split):
         if split=='train':
             poses = self.poses[batch['img_idxs']]
@@ -82,6 +79,7 @@ class NeRFSystem(LightningModule):
             img_indices=batch['img_idxs']
             assert poses.shape[0]==directions.shape[0]==img_indices.shape[0]
         else:
+            img_indices= -100 # for test time
             poses = batch['pose']
             directions = self.directions
 
@@ -94,6 +92,10 @@ class NeRFSystem(LightningModule):
 
         kwargs = {'test_time': split!='train',
                   'random_bg': self.hparams.random_bg}
+
+        if bool(self.hparams.adjust_view_appearance):
+            kwargs['img_indices']= img_indices
+
         if self.hparams.scale > 0.5:
             kwargs['exp_step_factor'] = 1/256
         if self.hparams.use_exposure:
@@ -102,14 +104,37 @@ class NeRFSystem(LightningModule):
         return render(self.model, rays_o, rays_d, **kwargs)
 
     def setup(self, stage):
+        print('nerf system setting up! ')
+        jitter=bool(self.hparams.jitter_view_appearance)
+        adjust=bool(self.hparams.adjust_view_appearance)
+        if adjust:
+            assert self.hparams.ray_sampling_strategy=='same_image'
+        print(f'jitter={jitter},adjust={adjust}')
         dataset = dataset_dict[self.hparams.dataset_name]
         kwargs = {'root_dir': self.hparams.root_dir,
+                  'jitter_view_appearance':jitter,
                   'downsample': self.hparams.downsample}
         self.train_dataset = dataset(split=self.hparams.split, **kwargs)
         self.train_dataset.batch_size = self.hparams.batch_size
         self.train_dataset.ray_sampling_strategy = self.hparams.ray_sampling_strategy
 
         self.test_dataset = dataset(split='test', **kwargs)
+
+        assert len(self.train_dataset.poses.shape)==3 # N, 3,4
+
+        if adjust:
+            N_training_views=self.train_dataset.poses.shape[0]
+        else:
+            N_training_views=-1
+        rgb_act = 'None' if self.hparams.use_exposure else 'Sigmoid'
+        self.model = NGP(scale=self.hparams.scale, rgb_act=rgb_act,training_views=N_training_views)
+        G = self.model.grid_size
+        self.model.register_buffer('density_grid',
+            torch.zeros(self.model.cascades, G**3))
+        self.model.register_buffer('grid_coords',
+            create_meshgrid3d(G, G, G, False, dtype=torch.int32).reshape(-1, 3))
+
+        self.t0=datetime.datetime.now()
 
     def configure_optimizers(self):
         # define additional parameters
@@ -189,7 +214,7 @@ class NeRFSystem(LightningModule):
     def on_validation_start(self):
         torch.cuda.empty_cache()
         if not self.hparams.no_save_test:
-            self.val_dir = f'results/{self.hparams.dataset_name}/{self.hparams.exp_name}'
+            self.val_dir = f'results/{self.hparams.dataset_name}/{self.hparams.exp_name}_jitter_{(self.hparams.jitter_view_appearance)}_adjust{self.hparams.adjust_view_appearance}'
             os.makedirs(self.val_dir, exist_ok=True)
 
     def validation_step(self, batch, batch_nb):
@@ -213,7 +238,6 @@ class NeRFSystem(LightningModule):
                            torch.clip(rgb_gt*2-1, -1, 1))
             logs['lpips'] = self.val_lpips.compute()
             self.val_lpips.reset()
-
         if not self.hparams.no_save_test: # save test image to disk
             idx = batch['img_idxs']
             rgb_pred = rearrange(results['rgb'].cpu().numpy(), '(h w) c -> h w c', h=h)
@@ -233,6 +257,11 @@ class NeRFSystem(LightningModule):
         mean_ssim = all_gather_ddp_if_available(ssims).mean()
         self.log('test/ssim', mean_ssim)
 
+
+        self.t1=datetime.datetime.now()
+        seconds_duration=(self.t1-self.t0).seconds
+        self.log('test/total_seconds_duration', seconds_duration)
+
         if self.hparams.eval_lpips:
             lpipss = torch.stack([x['lpips'] for x in outputs])
             mean_lpips = all_gather_ddp_if_available(lpipss).mean()
@@ -244,6 +273,18 @@ class NeRFSystem(LightningModule):
         items.pop("v_num", None)
         return items
 
+import random
+def seed_torch(seed=1337):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.enabled = False
+
 
 if __name__ == '__main__':
     hparams = get_opts()
@@ -254,7 +295,7 @@ if __name__ == '__main__':
     ckpt_cb = ModelCheckpoint(dirpath=f'ckpts/{hparams.dataset_name}/{hparams.exp_name}',
                               filename='{epoch:d}',
                               save_weights_only=True,
-                              every_n_epochs=hparams.num_epochs,
+                              every_n_epochs=hparams.num_epochs//5,
                               save_on_train_epoch_end=True,
                               save_top_k=-1)
     callbacks = [ckpt_cb, TQDMProgressBar(refresh_rate=1)]
@@ -264,7 +305,7 @@ if __name__ == '__main__':
                                default_hp_metric=False)
 
     trainer = Trainer(max_epochs=hparams.num_epochs,
-                      check_val_every_n_epoch=hparams.num_epochs,
+                      check_val_every_n_epoch=hparams.num_epochs//10,
                       callbacks=callbacks,
                       logger=logger,
                       enable_model_summary=False,

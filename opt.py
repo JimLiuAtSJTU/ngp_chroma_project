@@ -6,7 +6,7 @@ def get_opts():
     # dataset parameters
     parser.add_argument('--root_dir', type=str, required=True,
                         help='root directory of dataset')
-    parser.add_argument('--dataset_name', type=str, default='nsvf',
+    parser.add_argument('--dataset_name', type=str, default='nerf',
                         choices=['nerf', 'nsvf', 'colmap', 'nerfpp', 'rtmv'],
                         help='which dataset to train/test')
     parser.add_argument('--split', type=str, default='train',
@@ -14,6 +14,10 @@ def get_opts():
                         help='use which split to train')
     parser.add_argument('--downsample', type=float, default=1.0,
                         help='downsample factor (<=1.0) for the images')
+    parser.add_argument('--adjust_view_appearance', type=int, default=0,choices=[0,1],
+                        help='experimental setting: let network adjust')
+    parser.add_argument('--jitter_view_appearance', type=int, default=1,choices=[0,1],
+                        help='experimental setting: change the color ')
 
     # model parameters
     parser.add_argument('--scale', type=float, default=0.5,
@@ -31,13 +35,13 @@ def get_opts():
     # training options
     parser.add_argument('--batch_size', type=int, default=8192,
                         help='number of rays in a batch')
-    parser.add_argument('--ray_sampling_strategy', type=str, default='all_images',
+    parser.add_argument('--ray_sampling_strategy', type=str, default='same_image',
                         choices=['all_images', 'same_image'],
                         help='''
                         all_images: uniformly from all pixels of ALL images
                         same_image: uniformly from all pixels of a SAME image
                         ''')
-    parser.add_argument('--num_epochs', type=int, default=30,
+    parser.add_argument('--num_epochs', type=int, default=20,
                         help='number of training epochs')
     parser.add_argument('--num_gpus', type=int, default=1,
                         help='number of gpus')

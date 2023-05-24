@@ -12,12 +12,13 @@ from .base import BaseDataset
 
 class NeRFDataset(BaseDataset):
     def __init__(self, root_dir, split='train', downsample=1.0, **kwargs):
-        super().__init__(root_dir, split, downsample)
+        super().__init__(root_dir, split, downsample,**kwargs)
 
         self.read_intrinsics()
 
         if kwargs.get('read_meta', True):
             self.read_meta(split)
+        super().rgb_chroma_transform_all()
 
     def read_intrinsics(self):
         with open(os.path.join(self.root_dir, "transforms_train.json"), 'r') as f:
@@ -88,4 +89,5 @@ class NeRFDataset(BaseDataset):
 
         if len(self.rays)>0:
             self.rays = torch.FloatTensor(np.stack(self.rays)) # (N_images, hw, ?)
+            print(f'self.rays {self.rays.shape}')
         self.poses = torch.FloatTensor(self.poses) # (N_images, 3, 4)

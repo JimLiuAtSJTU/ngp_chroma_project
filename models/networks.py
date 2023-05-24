@@ -8,10 +8,21 @@ import numpy as np
 
 from .rendering import NEAR_DISTANCE
 
+view_appearance_codes_dim=16
+
+
+
 
 class NGP(nn.Module):
-    def __init__(self, scale, rgb_act='Sigmoid'):
+    def __init__(self, scale, rgb_act='Sigmoid',**kwargs):
         super().__init__()
+        if kwargs.get('training_views',-1) >0:
+            self.N_view_codes=kwargs.get('training_views')
+
+            self.view_appearance_code=nn.Parameter(data=torch.ones(self.N_view_codes,view_appearance_codes_dim),requires_grad=True)
+
+        else:
+            self.N_view_codes=0
 
         self.rgb_act = rgb_act
 
@@ -66,9 +77,9 @@ class NGP(nn.Module):
 
         self.rgb_net = \
             tcnn.Network(
-                n_input_dims=32, n_output_dims=3,
+                n_input_dims=32+view_appearance_codes_dim, n_output_dims=3,
                 network_config={
-                    "otype": "FullyFusedMLP",
+                    "otype": "CutlassMLP",
                     "activation": "ReLU",
                     "output_activation": self.rgb_act,
                     "n_neurons": 64,
@@ -129,7 +140,7 @@ class NGP(nn.Module):
         rgbs = torch.cat(out, 1)
         return rgbs
 
-    def forward(self, x, d, **kwargs):
+    def forward(self, x:torch.Tensor, d:torch.Tensor, **kwargs):
         """
         Inputs:
             x: (N, 3) xyz in [-scale, scale]
@@ -142,7 +153,27 @@ class NGP(nn.Module):
         sigmas, h = self.density(x, return_feat=True)
         d = d/torch.norm(d, dim=1, keepdim=True)
         d = self.dir_encoder((d+1)/2)
-        rgbs = self.rgb_net(torch.cat([d, h], 1))
+        #print(kwargs)
+        #print(f'n_views={self.N_view_codes}')
+        if self.N_view_codes>0:
+            # adjust
+            code_=kwargs.get('img_indices',-100)
+
+            if isinstance(code_,int): #
+                assert code_<0 # -100 for evaluation
+                # evaluation time, set identical to the 0 th pose camera.
+                view_dependet_codes = self.view_appearance_code[0].expand(x.shape[0],-1) # only change the 0th dim
+            else:
+                #assert torch.std(code_.float())<0.1
+
+                code_=code_[0]
+                view_dependet_codes = self.view_appearance_code[code_].expand(x.shape[0],-1) # only change the 0th dim
+        else:
+            # do not need to consider view appearance codes, just like vanilla nerf/ngp
+            view_dependet_codes=torch.ones(x.shape[0],view_appearance_codes_dim).to(x.device)
+        view_dependet_codes=torch.nn.functional.normalize(view_dependet_codes,p=2,dim=1)
+        #print(f'd,h,v{d.shape},{h.shape},{view_dependet_codes.shape}')
+        rgbs = self.rgb_net(torch.cat([d, h, view_dependet_codes], 1))
 
         if self.rgb_act == 'None': # rgbs is log-radiance
             if kwargs.get('output_radiance', False): # output HDR map
