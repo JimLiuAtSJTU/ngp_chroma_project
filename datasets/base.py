@@ -19,11 +19,15 @@ class BaseDataset(Dataset):
 
         self.rgb_jitter_flag=kwargs.get('jitter_view_appearance',False)
         self.already_jittered=False
-        print(f'base dataset class, kwargs={kwargs}')
         if not self.rgb_jitter_flag:
             self.std=0
+        elif kwargs.get('chroma_std',None) is not None:
+            std__=kwargs.get('chroma_std',None)
+            assert isinstance(std__,float)
+            self.std=std__
         else:
             self.std=std
+        print(f'base dataset class, kwargs={kwargs},chroma std={self.std}')
 
     def configure_rgb_chroma_codes(self):
         assert isinstance(self.poses,(torch.Tensor,np.ndarray))

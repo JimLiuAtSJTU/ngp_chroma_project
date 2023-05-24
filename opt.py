@@ -25,6 +25,9 @@ def get_opts():
     parser.add_argument('--use_exposure', action='store_true', default=False,
                         help='whether to train in HDR-NeRF setting')
 
+    parser.add_argument('--chroma_std', type=float, default=0.1,
+                        help='chromatic std to get color jittered dataset')
+
     # loss parameters
     parser.add_argument('--distortion_loss_w', type=float, default=0,
                         help='''weight of distortion loss (see losses.py),

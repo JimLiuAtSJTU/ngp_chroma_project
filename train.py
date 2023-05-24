@@ -113,6 +113,7 @@ class NeRFSystem(LightningModule):
         dataset = dataset_dict[self.hparams.dataset_name]
         kwargs = {'root_dir': self.hparams.root_dir,
                   'jitter_view_appearance':jitter,
+                  'chroma_std':self.hparams.chroma_std,
                   'downsample': self.hparams.downsample}
         self.train_dataset = dataset(split=self.hparams.split, **kwargs)
         self.train_dataset.batch_size = self.hparams.batch_size
