@@ -17,7 +17,7 @@ Instant-ngp (only NeRF) in pytorch+cuda trained with pytorch-lightning (**high q
 
 https://user-images.githubusercontent.com/11364490/181671484-d5e154c8-6cea-4d52-94b5-1e5dd92955f2.mp4
 
-Other representative videos are in [GALLERY.md](GALLERY.md)
+Other representative videos are in [GALLERY.md](../GALLERY.md)
 
 # :computer: Installation
 
@@ -70,7 +70,7 @@ Quickstart: `python train.py --root_dir <path/to/lego> --exp_name Lego`
 
 It will train the Lego scene for 30k steps (each step with 8192 rays), and perform one testing at the end. The training process should finish within about 5 minutes (saving testing image is slow, add `--no_save_test` to disable). Testing PSNR will be shown at the end.
 
-More options can be found in [opt.py](opt.py).
+More options can be found in [opt.py](../opt.py).
 
 For other public dataset training, please refer to the scripts under `benchmarking`.
 

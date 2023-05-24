@@ -79,6 +79,8 @@ class NeRFSystem(LightningModule):
         if split=='train':
             poses = self.poses[batch['img_idxs']]
             directions = self.directions[batch['pix_idxs']]
+            img_indices=batch['img_idxs']
+            assert poses.shape[0]==directions.shape[0]==img_indices.shape[0]
         else:
             poses = batch['pose']
             directions = self.directions
