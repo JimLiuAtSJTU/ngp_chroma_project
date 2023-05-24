@@ -31,6 +31,7 @@ class NeRFDataset(BaseDataset):
                         [0,  0,   1]])
 
         self.K = torch.FloatTensor(K)
+
         self.directions = get_ray_directions(h, w, self.K)
         self.img_wh = (w, h)
 
