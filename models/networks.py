@@ -8,7 +8,7 @@ import numpy as np
 
 from .rendering import NEAR_DISTANCE
 
-view_appearance_codes_dim=16
+view_appearance_codes_dim=32
 
 
 
@@ -74,18 +74,32 @@ class NGP(nn.Module):
                     "degree": 4,
                 },
             )
+        try:
+            self.rgb_net = \
+                tcnn.Network(
+                    n_input_dims=32+view_appearance_codes_dim, n_output_dims=3,
+                    network_config={
+                        "otype": "FullyFusedMLP",
+                        "activation": "ReLU",
+                        "output_activation": self.rgb_act,
+                        "n_neurons": 64,
+                        "n_hidden_layers": 2,
+                    }
+                )
+        except:
+            self.rgb_net = \
+                tcnn.Network(
+                    n_input_dims=32+view_appearance_codes_dim, n_output_dims=3,
+                    network_config={
+                        "otype": "CutlassMLP",
+                        "activation": "ReLU",
+                        "output_activation": self.rgb_act,
+                        "n_neurons": 64,
+                        "n_hidden_layers": 2,
+                    }
+                )
 
-        self.rgb_net = \
-            tcnn.Network(
-                n_input_dims=32+view_appearance_codes_dim, n_output_dims=3,
-                network_config={
-                    "otype": "CutlassMLP",
-                    "activation": "ReLU",
-                    "output_activation": self.rgb_act,
-                    "n_neurons": 64,
-                    "n_hidden_layers": 2,
-                }
-            )
+
 
         if self.rgb_act == 'None': # rgb_net output is log-radiance
             for i in range(3): # independent tonemappers for r,g,b

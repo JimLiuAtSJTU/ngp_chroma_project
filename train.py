@@ -59,8 +59,8 @@ class NeRFSystem(LightningModule):
         super().__init__()
         self.save_hyperparameters(hparams)
 
-        self.warmup_steps = 256
-        self.update_interval = 16
+        self.warmup_steps = 4096 # #256
+        self.update_interval = 64
 
         self.loss = NeRFLoss(lambda_distortion=self.hparams.distortion_loss_w)
         self.train_psnr = PeakSignalNoiseRatio(data_range=1)
@@ -152,8 +152,24 @@ class NeRFSystem(LightningModule):
         load_ckpt(self.model, self.hparams.weight_path)
 
         net_params = []
+        # configure low learning rate for the view_appearance code
+        # https://pytorch.org/docs/stable/optim.html#per-parameter-options
         for n, p in self.named_parameters():
-            if n not in ['dR', 'dT']: net_params += [p]
+            print(n)
+            if n not in ['dR', 'dT','model.view_appearance_code']:
+                if not n.startswith('val_lpips'):
+                    net_params.append(
+                        {
+                        'params':p
+                        }
+                    )
+            elif n =='model.view_appearance_code':
+                net_params.append(
+                    {
+                    'params':p,
+        #            'lr':self.hparams.lr/5 # for slower update
+                    }
+                )
 
         opts = []
         self.net_opt = FusedAdam(net_params, self.hparams.lr, eps=1e-15)
@@ -202,7 +218,11 @@ class NeRFSystem(LightningModule):
 
         with torch.no_grad():
             self.train_psnr(results['rgb'], batch['rgb'])
-        self.log('lr', self.net_opt.param_groups[0]['lr'])
+
+
+        lr_=[ self.net_opt.param_groups[i]['lr'] for i in range(len(self.net_opt.param_groups)) ]
+
+        self.log('lr', max(lr_))
         self.log('train/loss', loss)
         # ray marching samples per ray (occupied space on the ray)
         self.log('train/rm_s', results['rm_samples']/len(batch['rgb']), True)
@@ -262,6 +282,7 @@ class NeRFSystem(LightningModule):
         self.t1=datetime.datetime.now()
         seconds_duration=(self.t1-self.t0).seconds
         self.log('test/total_seconds_duration', seconds_duration)
+        self.log('test/adjust',(self.hparams.adjust_view_appearance))
 
         if self.hparams.eval_lpips:
             lpipss = torch.stack([x['lpips'] for x in outputs])
@@ -289,6 +310,7 @@ def seed_torch(seed=1337):
 
 if __name__ == '__main__':
     hparams = get_opts()
+    print(hparams)
     if hparams.val_only and (not hparams.ckpt_path):
         raise ValueError('You need to provide a @ckpt_path for validation!')
     system = NeRFSystem(hparams)
