@@ -17,7 +17,6 @@ inspecting_GPU_INDEX=1
 def wait():
     nvmlInit()
 
-
     print(f'nvml check gpu:{inspecting_GPU_INDEX}')
 
     idle_time=0
