@@ -119,7 +119,7 @@ class NeRFSystem(LightningModule):
         self.train_dataset.batch_size = self.hparams.batch_size
         self.train_dataset.ray_sampling_strategy = self.hparams.ray_sampling_strategy
 
-        self.test_dataset = dataset(split='test', **kwargs)
+        self.test_dataset = dataset(split='all', **kwargs)
 
         assert len(self.train_dataset.poses.shape)==3 # N, 3,4
 
@@ -283,6 +283,7 @@ class NeRFSystem(LightningModule):
         seconds_duration=(self.t1-self.t0).seconds
         self.log('test/total_seconds_duration', seconds_duration)
         self.log('test/adjust',(self.hparams.adjust_view_appearance))
+        self.log('test/chroma_std',self.hparams.chroma_std)
 
         if self.hparams.eval_lpips:
             lpipss = torch.stack([x['lpips'] for x in outputs])

@@ -5,7 +5,10 @@ ROOT_DIR="/home/zhenhuanliu/Desktop/CVproj_ngp_chroma/ngp_chroma_project/data/ne
 
 dash="__"
 
-for std in 0.2 0.1
+
+python gpu_wait.py
+
+for std in 0.1 0.2  0.05
 do
 #for data_name in "lego" # "drums" "ficus" "hotdog" "chair" "materials" "mic" "ship"
 for data_name in "lego"  "drums" "ficus" "hotdog" "chair" "materials" "mic" "ship"
