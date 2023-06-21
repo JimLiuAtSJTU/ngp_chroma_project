@@ -38,15 +38,21 @@ class DistortionLoss(torch.autograd.Function):
 
 
 class NeRFLoss(nn.Module):
-    def __init__(self, lambda_opacity=1e-3, lambda_distortion=1e-3):
+    def __init__(self, lambda_opacity=1e-3, lambda_distortion=1e-3,chroma_std=1e-1,chroma_lambda=0.1):
         super().__init__()
 
         self.lambda_opacity = lambda_opacity
         self.lambda_distortion = lambda_distortion
+        self.chroma_std = chroma_std
+        self.chroma_lambda_=chroma_lambda
 
     def forward(self, results, target, **kwargs):
         d = {}
         d['rgb'] = (results['rgb']-target['rgb'])**2
+        color_diff=torch.mean(results['color_diff']**2) # use the results to estimate the std
+
+        #d['color_jitter'] = torch.relu(color_diff-self.chroma_std**2)*self.chroma_lambda_
+
 
         o = results['opacity']+1e-10
         # encourage opacity to be either 0 or 1 to avoid floater

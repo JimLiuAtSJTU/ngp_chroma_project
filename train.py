@@ -60,9 +60,8 @@ class NeRFSystem(LightningModule):
         self.save_hyperparameters(hparams)
 
         self.warmup_steps = 256 # 256
-        self.update_interval = 16
+        self.update_interval = 8
 
-        self.loss = NeRFLoss(lambda_distortion=self.hparams.distortion_loss_w)
         self.train_psnr = PeakSignalNoiseRatio(data_range=1)
         self.val_psnr = PeakSignalNoiseRatio(data_range=1)
         self.val_ssim = StructuralSimilarityIndexMeasure(data_range=1)
@@ -118,6 +117,9 @@ class NeRFSystem(LightningModule):
         self.train_dataset = dataset(split=self.hparams.split, **kwargs)
         self.train_dataset.batch_size = self.hparams.batch_size
         self.train_dataset.ray_sampling_strategy = self.hparams.ray_sampling_strategy
+        self.loss = NeRFLoss(lambda_distortion=self.hparams.distortion_loss_w,
+                             chroma_std=self.hparams.chroma_std,
+                             chroma_lambda=self.hparams.chroma_diff_regularization)
 
         self.test_dataset = dataset(split='all', **kwargs)
 
@@ -184,14 +186,14 @@ class NeRFSystem(LightningModule):
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset,
-                          num_workers=16,
+                          num_workers=4,
                           persistent_workers=True,
                           batch_size=None,
                           pin_memory=True)
 
     def val_dataloader(self):
         return DataLoader(self.test_dataset,
-                          num_workers=8,
+                          num_workers=4,
                           batch_size=None,
                           pin_memory=True)
 
@@ -228,6 +230,14 @@ class NeRFSystem(LightningModule):
         self.log('train/rm_s', results['rm_samples']/len(batch['rgb']), True)
         # volume rendering samples per ray (stops marching when transmittance drops below 1e-4)
         self.log('train/vr_s', results['vr_samples']/len(batch['rgb']), True)
+        self.log('train/input_diff', self.train_dataset.img_diff_mean, True)
+
+
+        #self.log('train/chroma_diffloss', loss_d['color_jitter']/self.loss.chroma_lambda_, True)
+        self.log('train/color_diff', torch.pow(results['color_diff'],2).mean(), True)
+
+        self.log('train/chroma_std', self.hparams.chroma_std, True)
+
         self.log('train/psnr', self.train_psnr, True)
 
         return loss
@@ -329,7 +339,7 @@ if __name__ == '__main__':
                                default_hp_metric=False)
 
     trainer = Trainer(max_epochs=hparams.num_epochs,
-                      check_val_every_n_epoch=hparams.num_epochs//10,
+                      check_val_every_n_epoch=hparams.num_epochs//5,
                       callbacks=callbacks,
                       logger=logger,
                       enable_model_summary=False,

@@ -1,8 +1,8 @@
 /.vscode
 /.VSCodeCounter
-ckpts/
-logs/
-results/
+demo/ckpts/
+demo/logs/
+demo/results/
 *.mp4
 data/
 # Byte-compiled / optimized / DLL files

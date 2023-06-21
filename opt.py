@@ -12,6 +12,10 @@ def get_opts():
     parser.add_argument('--split', type=str, default='train',
                         choices=['train', 'trainval', 'trainvaltest'],
                         help='use which split to train')
+
+    parser.add_argument('--chroma_diff_regularization', type=float, default=0.1 ,
+                        help='chroma_diff_regularization weight to approx the chroma diff')
+
     parser.add_argument('--downsample', type=float, default=1.0,
                         help='downsample factor (<=1.0) for the images')
     parser.add_argument('--adjust_view_appearance', type=int, default=0,choices=[0,1],
@@ -44,7 +48,7 @@ def get_opts():
                         all_images: uniformly from all pixels of ALL images
                         same_image: uniformly from all pixels of a SAME image
                         ''')
-    parser.add_argument('--num_epochs', type=int, default=30,
+    parser.add_argument('--num_epochs', type=int, default=20,
                         help='number of training epochs')
     parser.add_argument('--num_gpus', type=int, default=1,
                         help='number of gpus')

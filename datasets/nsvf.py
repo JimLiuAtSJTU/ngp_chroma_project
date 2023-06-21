@@ -8,11 +8,11 @@ from .ray_utils import get_ray_directions
 from .color_utils import read_image
 
 from .base import BaseDataset
-
+import cv2
 
 class NSVFDataset(BaseDataset):
-    def __init__(self, root_dir, split='train', downsample=1.0, **kwargs):
-        super().__init__(root_dir, split, downsample)
+    def __init__(self, root_dir, split='train', downsample=0.5, **kwargs):
+        super().__init__(root_dir, split, downsample,**kwargs)
 
         self.read_intrinsics()
 
@@ -27,6 +27,7 @@ class NSVFDataset(BaseDataset):
             elif 'Lego' in self.root_dir: self.scale *= 1.1
 
             self.read_meta(split)
+        super().rgb_chroma_transform_all()
 
     def read_intrinsics(self):
         if 'Synthetic' in self.root_dir or 'Ignatius' in self.root_dir:
@@ -43,10 +44,14 @@ class NSVFDataset(BaseDataset):
         else:
             K = np.loadtxt(os.path.join(self.root_dir, 'intrinsics.txt'),
                            dtype=np.float32)[:3, :3]
+            print(f'K={K}')
             if 'BlendedMVS' in self.root_dir:
                 w, h = int(768*self.downsample), int(576*self.downsample)
+                print(f'BlendedMVS dataset!')
+
             elif 'Tanks' in self.root_dir:
                 w, h = int(1920*self.downsample), int(1080*self.downsample)
+                print(f'tanks dataset!')
             K[:2] *= self.downsample
 
         self.K = torch.FloatTensor(K)
@@ -72,14 +77,27 @@ class NSVFDataset(BaseDataset):
                 c2w[:, 3] /= 2*self.scale # to bound the scene inside [-0.5, 0.5]
                 self.poses += [c2w]
         else:
+
             if split == 'train': prefix = '0_'
             elif split == 'trainval': prefix = '[0-1]_'
             elif split == 'trainvaltest': prefix = '[0-2]_'
             elif split == 'val': prefix = '1_'
             elif 'Synthetic' in self.root_dir: prefix = '2_' # test set for synthetic scenes
             elif split == 'test': prefix = '1_' # test set for real scenes
+            elif split =='all': prefix = '[0-2]_'
             else: raise ValueError(f'{split} split not recognized!')
+
             img_paths = sorted(glob.glob(os.path.join(self.root_dir, 'rgb', prefix+'*.png')))
+
+
+            to_pop=[]
+            for i,path in enumerate(img_paths):
+                if 'jitter' in path:
+                    to_pop.append(path)
+            img_paths = sorted(list(  set(img_paths)-set(to_pop)       ))
+
+            self.img_paths=img_paths
+
             poses = sorted(glob.glob(os.path.join(self.root_dir, 'pose', prefix+'*.txt')))
 
             print(f'Loading {len(img_paths)} {split} images ...')

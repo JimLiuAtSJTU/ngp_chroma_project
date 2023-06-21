@@ -37,6 +37,7 @@ class NeRFDataset(BaseDataset):
         self.img_wh = (w, h)
 
     def read_meta(self, split):
+        print(f'reading meta, split={split}')
         self.rays = []
         self.poses = []
 
@@ -56,6 +57,7 @@ class NeRFDataset(BaseDataset):
                 frames = json.load(f)["frames"]
 
         print(f'Loading {len(frames)} {split} images ...')
+        self.frames=frames
         for frame in tqdm(frames):
             c2w = np.array(frame['transform_matrix'])[:3, :4]
 

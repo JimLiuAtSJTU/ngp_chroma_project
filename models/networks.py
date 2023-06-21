@@ -169,9 +169,15 @@ class NGP(nn.Module):
         d = self.dir_encoder((d+1)/2)
         #print(kwargs)
         #print(f'n_views={self.N_view_codes}')
+
+        defalt_codes=torch.ones(x.shape[0],view_appearance_codes_dim).to(x.device)
+
+
+
         if self.N_view_codes>0:
             # adjust
             code_=kwargs.get('img_indices',-100)
+            rgb_2_code = self.view_appearance_code[0].expand(x.shape[0], -1)
 
             if isinstance(code_,int): #
                 assert code_<0 # -100 for evaluation
@@ -184,10 +190,18 @@ class NGP(nn.Module):
                 view_dependet_codes = self.view_appearance_code[code_].expand(x.shape[0],-1) # only change the 0th dim
         else:
             # do not need to consider view appearance codes, just like vanilla nerf/ngp
-            view_dependet_codes=torch.ones(x.shape[0],view_appearance_codes_dim).to(x.device)
+            view_dependet_codes=defalt_codes
+            rgb_2_code = defalt_codes
+
         view_dependet_codes=torch.nn.functional.normalize(view_dependet_codes,p=2,dim=1)
         #print(f'd,h,v{d.shape},{h.shape},{view_dependet_codes.shape}')
         rgbs = self.rgb_net(torch.cat([d, h, view_dependet_codes], 1))
+
+        rgbs_2 = self.rgb_net(torch.cat([d, h, torch.nn.functional.normalize(rgb_2_code)], 1))
+
+        extra={
+            'color_diff': rgbs_2 - rgbs
+        }
 
         if self.rgb_act == 'None': # rgbs is log-radiance
             if kwargs.get('output_radiance', False): # output HDR map
@@ -195,7 +209,7 @@ class NGP(nn.Module):
             else: # convert to LDR using tonemapper networks
                 rgbs = self.log_radiance_to_rgb(rgbs, **kwargs)
 
-        return sigmas, rgbs
+        return sigmas, rgbs, extra
 
     @torch.no_grad()
     def get_all_cells(self):
